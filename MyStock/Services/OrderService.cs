@@ -5,7 +5,7 @@ using System.Linq.Expressions;
 
 namespace MyStock.Services
 {
-    public class OrderService
+    public class OrderService : IService
     {
         private readonly AppDbContext _context;
 

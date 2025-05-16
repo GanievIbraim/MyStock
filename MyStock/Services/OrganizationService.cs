@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MyStock.Services
 {
-    public class OrganizationService
+    public class OrganizationService : IService
     {
         private readonly AppDbContext _context;
 

@@ -112,9 +112,9 @@ namespace MyStock.Migrations
                 {
                     table.PrimaryKey("PK_Warehouses", x => x.Id);
                     table.ForeignKey(
-                        name: "FK_Warehouses_Users_OwnerId",
+                        name: "FK_Warehouses_Contacts_OwnerId",
                         column: x => x.OwnerId,
-                        principalTable: "Users",
+                        principalTable: "Contacts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
@@ -470,6 +470,9 @@ namespace MyStock.Migrations
                 name: "Products");
 
             migrationBuilder.DropTable(
+                name: "Users");
+
+            migrationBuilder.DropTable(
                 name: "ProductCategories");
 
             migrationBuilder.DropTable(
@@ -477,9 +480,6 @@ namespace MyStock.Migrations
 
             migrationBuilder.DropTable(
                 name: "Warehouses");
-
-            migrationBuilder.DropTable(
-                name: "Users");
 
             migrationBuilder.DropTable(
                 name: "Organizations");
