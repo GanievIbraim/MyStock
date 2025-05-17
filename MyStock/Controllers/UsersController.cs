@@ -30,11 +30,23 @@ namespace MyStock.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult> Create(CreateUserDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateUserDto dto)
         {
-            var created = await _service.CreateAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = created.Id }, new { id = created.Id });
+            try
+            {
+                var id = await _service.CreateAsync(dto);
+                return CreatedAtAction(nameof(GetById), new { id }, id);
+            }
+            catch (KeyNotFoundException knf)
+            {
+                return NotFound(knf.Message);
+            }
+            catch (ArgumentException arg)
+            {
+                return BadRequest(arg.Message);
+            }
         }
+
 
         [HttpPost("login")]
         public async Task<ActionResult<LoginResultDto>> Login(LoginDto dto)
@@ -46,8 +58,13 @@ namespace MyStock.Controllers
         [HttpPut("{id}/status")]
         public async Task<IActionResult> UpdateStatus(Guid id, [FromQuery] bool isActive)
         {
-            var updated = await _service.UpdateStatus(id, isActive);
-            return updated == null ? NotFound() : NoContent();
+            var user = await _service.GetByIdAsync(id);
+            if (user == null)
+                return NotFound();
+
+            await _service.UpdateStatusAsync(id, isActive);
+            return NoContent();
         }
+
     }
 }

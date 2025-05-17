@@ -6,9 +6,12 @@ namespace MyStock.Entities
     {
         public DbSet<Product> Products { get; set; }
         public DbSet<ProductCategory> ProductCategories { get; set; }
+
         public DbSet<Organization> Organizations { get; set; }
         public DbSet<Contact> Contacts { get; set; }
         public DbSet<User> Users { get; set; }
+        public DbSet<Employee> Employees { get; set; }
+
         public DbSet<Warehouse> Warehouses { get; set; }
         public DbSet<WarehouseSection> WarehouseSections { get; set; }
 
@@ -94,6 +97,13 @@ namespace MyStock.Entities
                 .WithMany()
                 .HasForeignKey(ii => ii.SectionId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            // Employee - Contact (N:1)
+            modelBuilder.Entity<Employee>()
+                .HasOne(e => e.Contact)
+                .WithMany()
+                .HasForeignKey(e => e.ContactId)
+                .OnDelete(DeleteBehavior.SetNull);
 
             // Precision for price fields
             modelBuilder.Entity<Product>()
@@ -133,6 +143,8 @@ namespace MyStock.Entities
                 .Property(o => o.Name)
                 .HasMaxLength(200)
                 .IsRequired();
+
+
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

@@ -20,5 +20,7 @@ namespace MyStock.Extensions
         public static ReferenceDto ToRef(this Warehouse warehouse)
             => new() { Id = warehouse.Id, DisplayValue = warehouse.Name };
 
+        public static ReferenceDto ToRef(this WarehouseSection section)
+            => new() { Id = section.Id, DisplayValue = section.Code };
     }
 }

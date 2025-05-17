@@ -1,88 +1,155 @@
-﻿using MyStock.Entities;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using MyStock.Services;
+using MyStock.DTO;
+using MyStock.Utils;
+using MyStock.Entities;
+using MyStock.Extensions;
 
-public class ProductService
+namespace MyStock.Services
 {
-    private readonly AppDbContext _context;
-
-    public ProductService(AppDbContext context)
+    public class ProductService
     {
-        _context = context;
-    }
+        private readonly AppDbContext _context;
 
-    public async Task<IEnumerable<Product>> GetAllAsync() =>
-        await _context.Products.Include(p => p.Category).ToListAsync();
+        public ProductService(AppDbContext context)
+            => _context = context;
 
-    public async Task<Product?> GetByIdAsync(Guid id) =>
-        await _context.Products.FindAsync(id);
+        private IQueryable<ProductDto> ProductProjection =>
+            _context.Products
+                .AsNoTracking()
+                .Include(p => p.Category)
+                .Include(p => p.Section)
+                .Include(p => p.Supplier)
+                .Select(p => new ProductDto
+                {
+                    Id = p.Id,
+                    Name = p.Name,
+                    Code = p.Code,
+                    Barcode = p.Barcode,
+                    Description = p.Description,
+                    Quantity = p.Quantity,
+                    Price = p.Price,
+                    Unit = p.Unit.ToCodeDisplay(),
+                    Category = p.Category != null ? p.Category.ToRef() : null,
+                    Section = p.Section != null ? p.Section.ToRef() : null,
+                    Supplier = p.Supplier != null ? p.Supplier.ToRef() : null,
+                });
 
-    public async Task<Product?> GetByBarcodeAsync(string barcode) =>
-        await _context.Products.FirstOrDefaultAsync(p => p.Barcode == barcode);
+        /// <summary>
+        /// Получить все товары
+        /// </summary>
+        public async Task<List<ProductDto>> GetAllAsync()
+            => await ProductProjection.ToListAsync();
 
-    public async Task<Product> CreateAsync(Product product)
-    {
-        var categoryExists = await _context.ProductCategories
-            .AnyAsync(c => c.Id == product.CategoryId);
-        if (!categoryExists)
-            throw new KeyNotFoundException($"Категория с Id {product.CategoryId} не найдена.");
+        /// <summary>
+        /// Получить товар по Id
+        /// </summary>
+        public async Task<ProductDto?> GetByIdAsync(Guid id)
+            => await ProductProjection
+                .FirstOrDefaultAsync(p => p.Id == id);
 
-        if (product.SectionId.HasValue)
+        /// <summary>
+        /// Получить товар по штрихкоду
+        /// </summary>
+        public async Task<ProductDto?> GetByBarcodeAsync(string barcode)
+            => await ProductProjection
+                .FirstOrDefaultAsync(p => p.Barcode == barcode);
+
+        /// <summary>
+        /// Создать новый товар
+        /// </summary>
+        public async Task<Guid> CreateAsync(CreateProductDto dto)
         {
-            var sectionExists = await _context.WarehouseSections
-                .AnyAsync(s => s.Id == product.SectionId.Value);
-            if (!sectionExists)
-                throw new KeyNotFoundException($"Секция склада с Id {product.SectionId} не найдена.");
+            EnumUtils.EnsureEnumDefined(dto.Unit, nameof(dto.Unit));
+
+            await ServiceUtils.EnsureExistsAsync(_context.ProductCategories, dto.CategoryId, "Категория");
+            await ServiceUtils.EnsureExistsAsync(_context.WarehouseSections, dto.SectionId, "Секция склада");
+            await ServiceUtils.EnsureExistsAsync(_context.Organizations, dto.SupplierId, "Поставщик");
+
+            var p = new Product
+            {
+                Id = Guid.NewGuid(),
+                Name = dto.Name,
+                Code = dto.Code,
+                Barcode = dto.Barcode,
+                Description = dto.Description,
+                Quantity = dto.Quantity,
+                Price = dto.Price,
+                Unit = dto.Unit,
+                CategoryId = dto.CategoryId,
+                SectionId = dto.SectionId,
+                SupplierId = dto.SupplierId
+            };
+
+            _context.Products.Add(p);
+            await _context.SaveChangesAsync();
+            return p.Id;
         }
 
-        if (product.SupplierId.HasValue)
+        /// <summary>
+        /// Обновить существующий товар
+        /// </summary>
+        public async Task<bool> UpdateAsync(Guid id, CreateProductDto dto)
         {
-            var supplierExists = await _context.Organizations
-                .AnyAsync(o => o.Id == product.SupplierId.Value);
-            if (!supplierExists)
-                throw new KeyNotFoundException($"Поставщик с Id {product.SupplierId} не найден.");
+            var p = await _context.Products.FindAsync(id);
+            if (p == null) return false;
+
+            EnumUtils.EnsureEnumDefined(dto.Unit, nameof(dto.Unit));
+            await ServiceUtils.EnsureExistsAsync(_context.ProductCategories, dto.CategoryId, "Категория");
+            await ServiceUtils.EnsureExistsAsync(_context.WarehouseSections, dto.SectionId, "Секция склада");
+            await ServiceUtils.EnsureExistsAsync(_context.Organizations, dto.SupplierId, "Поставщик");
+
+            p.Name = dto.Name;
+            p.Code = dto.Code;
+            p.Barcode = dto.Barcode;
+            p.Description = dto.Description;
+            p.Quantity = dto.Quantity;
+            p.Price = dto.Price;
+            p.Unit = dto.Unit;
+            p.CategoryId = dto.CategoryId;
+            p.SectionId = dto.SectionId;
+            p.SupplierId = dto.SupplierId;
+
+            await _context.SaveChangesAsync();
+            return true;
         }
 
-        _context.Products.Add(product);
-        await _context.SaveChangesAsync();
+        /// <summary>
+        /// Удалить товар по Id
+        /// </summary>
+        public async Task<bool> DeleteAsync(Guid id)
+        {
+            var p = await _context.Products.FindAsync(id);
+            if (p == null) return false;
 
-        return product;
-    }
+            _context.Products.Remove(p);
+            await _context.SaveChangesAsync();
+            return true;
+        }
 
+        /// <summary>
+        /// Фильтрация по имени, категории, секции
+        /// </summary>
+        public async Task<List<ProductDto>> FilterAsync(
+            string? name,
+            Guid? categoryId,
+            Guid? sectionId)
+        {
+            var q = ProductProjection;
 
-    public async Task<Product?> UpdateAsync(Guid id, Product product)
-    {
-        var existing = await _context.Products.FindAsync(id);
-        if (existing == null) return null;
+            if (!string.IsNullOrWhiteSpace(name))
+                q = q.Where(p => p.Name.Contains(name));
 
-        _context.Entry(existing).CurrentValues.SetValues(product);
-        await _context.SaveChangesAsync();
-        return existing;
-    }
+            if (categoryId.HasValue)
+                q = q.Where(p => p.Category != null && p.Category.Id == categoryId.Value);
 
-    public async Task<bool> DeleteAsync(Guid id)
-    {
-        var existing = await _context.Products.FindAsync(id);
-        if (existing == null) return false;
+            if (sectionId.HasValue)
+                q = q.Where(p => p.Section != null && p.Section.Id == sectionId.Value);
 
-        _context.Products.Remove(existing);
-        await _context.SaveChangesAsync();
-        return true;
-    }
-
-    public async Task<IEnumerable<Product>> FilterAsync(string? name, Guid? categoryId, Guid? sectionId)
-    {
-        var query = _context.Products.AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(name))
-            query = query.Where(p => p.Name.Contains(name));
-
-        if (categoryId.HasValue)
-            query = query.Where(p => p.CategoryId == categoryId);
-
-        if (sectionId.HasValue)
-            query = query.Where(p => p.SectionId == sectionId);
-
-        return await query.ToListAsync();
+            return await q.ToListAsync();
+        }
     }
 }

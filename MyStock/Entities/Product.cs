@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using MyStock.Json;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MyStock.Entities
 {
@@ -22,7 +24,8 @@ namespace MyStock.Entities
         public Organization? Supplier { get; set; }
 
     }
-    
+
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum ProductUnit
     {
         [Display(Name = "Штука")]

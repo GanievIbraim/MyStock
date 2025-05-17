@@ -1,116 +1,88 @@
-﻿using MyStock.Entities;
-using MyStock.Services;
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using MyStock.DTO;
+using MyStock.Services;
 
 namespace MyStock.Controllers
 {
-    [Route("api/orders")]
     [ApiController]
+    [Route("api/orders")]
     public class OrdersController : ControllerBase
     {
         private readonly OrderService _service;
-
-        public OrdersController(OrderService service)
-        {
-            _service = service;
-        }
+        public OrdersController(OrderService service) => _service = service;
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<OrderResponseDto>>> GetAll()
-        {
-            var orders = await _service.GetAllAsync();
-            return Ok(orders);
-        }
+        public async Task<ActionResult<IEnumerable<OrderDto>>> GetAll()
+            => Ok(await _service.GetAllAsync());
 
-        [HttpGet("{id}")]
-        public async Task<ActionResult<OrderResponseDto>> GetById(Guid id)
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<OrderDto>> GetById(Guid id)
         {
-            var order = await _service.GetByIdAsync(id);
-            return order == null
-                ? NotFound()
-                : Ok(order);
+            var dto = await _service.GetByIdAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
         }
 
         [HttpPost]
-        public async Task<ActionResult<OrderResponseDto>> Create([FromBody] CreateOrderDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateOrderDto dto)
         {
-            var order = await _service.CreateAsync(dto);
-
-            // Преобразуем созданную сущность в DTO для ответа
-            var response = new OrderResponseDto
+            try
             {
-                Id = order.Id,
-                Number = order.Number,
-                Type = order.Type,
-                Status = order.Status,
-                ApprovedAt = order.ApprovedAt,
-                WarehouseId = order.WarehouseId,
-                WarehouseName = string.Empty,       // при необходимости заполнить
-                OrganizationId = order.OrganizationId,
-                OrganizationName = string.Empty,    // при необходимости заполнить
-                ContactId = order.ContactId,
-                ContactName = string.Empty,         // при необходимости заполнить
-                Comment = order.Comment
-            };
-
-            return CreatedAtAction(
-                nameof(GetById),
-                new { id = response.Id },
-                response);
+                var id = await _service.CreateAsync(dto);
+                return CreatedAtAction(nameof(GetById), new { id }, id);
+            }
+            catch (KeyNotFoundException knf)
+            {
+                return NotFound(knf.Message);
+            }
+            catch (ArgumentException arg)
+            {
+                return BadRequest(arg.Message);
+            }
         }
 
-        [HttpPut("{id}")]
+        [HttpPut("{id:guid}")]
         public async Task<IActionResult> Update(Guid id, [FromBody] CreateOrderDto dto)
         {
-            var updated = await _service.UpdateAsync(id, dto);
-            return updated == null
-                ? NotFound()
-                : NoContent();
+            try
+            {
+                var ok = await _service.UpdateAsync(id, dto);
+                return ok ? NoContent() : NotFound();
+            }
+            catch (KeyNotFoundException knf)
+            {
+                return NotFound(knf.Message);
+            }
+            catch (ArgumentException arg)
+            {
+                return BadRequest(arg.Message);
+            }
         }
 
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id)
-        {
-            var deleted = await _service.DeleteAsync(id);
-            return deleted
+            => (await _service.DeleteAsync(id))
                 ? NoContent()
                 : NotFound();
-        }
 
-        [HttpPost("{id}/approve")]
+        [HttpPost("{id:guid}/approve")]
         public async Task<ActionResult<ApprovedOrderDto>> Approve(Guid id)
         {
-            var result = await _service.ApproveAsync(id);
-            return Ok(result);
+            try
+            {
+                var res = await _service.ApproveAsync(id);
+                return Ok(res);
+            }
+            catch (KeyNotFoundException knf)
+            {
+                return NotFound(knf.Message);
+            }
+            catch (InvalidOperationException inv)
+            {
+                return BadRequest(inv.Message);
+            }
         }
-
-
-        [HttpGet("filter")]
-        public async Task<ActionResult<IEnumerable<OrderResponseDto>>> Filter(
-            [FromQuery] OrderFilterParameters filter)
-        {
-            var orders = await _service.GetAllAsync();
-            var query = orders.AsQueryable();
-
-            if (filter.Status.HasValue)
-                query = query.Where(o => o.Status == filter.Status.Value);
-            if (filter.WarehouseId.HasValue)
-                query = query.Where(o => o.WarehouseId == filter.WarehouseId.Value);
-            if (filter.ApprovedFrom.HasValue)
-                query = query.Where(o => o.ApprovedAt >= filter.ApprovedFrom.Value);
-            if (filter.ApprovedTo.HasValue)
-                query = query.Where(o => o.ApprovedAt <= filter.ApprovedTo.Value);
-
-            return Ok(query);
-        }
-    }
-
-    public class OrderFilterParameters
-    {
-        public OrderStatus? Status { get; set; }
-        public Guid? WarehouseId { get; set; }
-        public DateTime? ApprovedFrom { get; set; }
-        public DateTime? ApprovedTo { get; set; }
     }
 }

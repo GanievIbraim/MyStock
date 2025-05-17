@@ -1,5 +1,12 @@
-﻿using MyStock.Entities;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using MyStock.DTO;
+using MyStock.Entities;
+using MyStock.Extensions;
+using MyStock.Utils;
 
 namespace MyStock.Services
 {
@@ -8,48 +15,113 @@ namespace MyStock.Services
         private readonly AppDbContext _context;
 
         public OrganizationService(AppDbContext context)
-        {
-            _context = context;
-        }
+            => _context = context;
 
-        public async Task<IEnumerable<Organization>> GetAllAsync()
-        {
-            return await _context.Organizations
+        // ─── Проекция Organization → OrganizationDto ──────────────────────
+        private IQueryable<OrganizationDto> OrganizationProjection =>
+            _context.Organizations
+                .AsNoTracking()
                 .Include(o => o.PrimaryContact)
-                .ToListAsync();
-        }
+                .Select(o => new OrganizationDto
+                {
+                    Id = o.Id,
+                    Name = o.Name,
+                    LegalForm = o.LegalForm,
+                    INN = o.INN,
+                    KPP = o.KPP,
+                    OGRN = o.OGRN,
+                    Address = o.Address,
+                    Phone = o.Phone,
+                    Email = o.Email,
+                    Type = o.Type.ToCodeDisplay(),
+                    PrimaryContact = o.PrimaryContact != null ? o.PrimaryContact.ToRef() : null,
+                });
 
-        public async Task<Organization?> GetByIdAsync(Guid id)
-        {
-            return await _context.Organizations
-                .Include(o => o.PrimaryContact)
+        /// <summary>
+        /// Все организации
+        /// </summary>
+        public async Task<List<OrganizationDto>> GetAllAsync()
+            => await OrganizationProjection.ToListAsync();
+
+        /// <summary>
+        /// Организация по Id
+        /// </summary>
+        public async Task<OrganizationDto?> GetByIdAsync(Guid id)
+            => await OrganizationProjection
                 .FirstOrDefaultAsync(o => o.Id == id);
-        }
 
-        public async Task<IEnumerable<Organization>> FilterByTypeAsync(OrganizationType type)
-        {
-            return await _context.Organizations
+        /// <summary>
+        /// Фильтр по типу организации
+        /// </summary>
+        public async Task<List<OrganizationDto>> FilterByTypeAsync(OrganizationType type)
+            => await _context.Organizations
                 .Where(o => o.Type == type)
+                .Select(o => new OrganizationDto
+                {
+                    Id = o.Id,
+                    Name = o.Name,
+                    Type = o.Type.ToCodeDisplay(),
+                    PrimaryContact = o.PrimaryContact != null ? o.PrimaryContact.ToRef() : null,
+                })
                 .ToListAsync();
-        }
 
-        public async Task<Organization> CreateAsync(Organization entity)
+        /// <summary>
+        /// Создать новую организацию
+        /// </summary>
+        public async Task<Guid> CreateAsync(CreateOrganizationDto dto)
         {
-            _context.Organizations.Add(entity);
+            EnumUtils.EnsureEnumDefined(dto.Type, nameof(dto.Type));
+
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.PrimaryContactId, "Контакт");
+
+            var org = new Organization
+            {
+                Id = Guid.NewGuid(),
+                Name = dto.Name,
+                LegalForm = dto.LegalForm,
+                INN = dto.INN,
+                KPP = dto.KPP,
+                OGRN = dto.OGRN,
+                Address = dto.Address,
+                Phone = dto.Phone,
+                Email = dto.Email,
+                Type = dto.Type,
+                PrimaryContactId = dto.PrimaryContactId
+            };
+
+            _context.Organizations.Add(org);
             await _context.SaveChangesAsync();
-            return entity;
+            return org.Id;
         }
 
-        public async Task<Organization?> UpdateAsync(Guid id, Organization updated)
+        /// <summary>Обновить организацию. Возвращает true, если найдена и обновлена.</summary>
+        public async Task<bool> UpdateAsync(Guid id, CreateOrganizationDto dto)
         {
-            var existing = await _context.Organizations.FindAsync(id);
-            if (existing == null) return null;
+            var org = await _context.Organizations.FindAsync(id);
+            if (org == null) return false;
 
-            _context.Entry(existing).CurrentValues.SetValues(updated);
+            EnumUtils.EnsureEnumDefined(dto.Type, nameof(dto.Type));
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.PrimaryContactId, "Контакт");
+
+            // Явно присваиваем, чтобы не трогать другие поля
+            org.Name = dto.Name;
+            org.LegalForm = dto.LegalForm;
+            org.INN = dto.INN;
+            org.KPP = dto.KPP;
+            org.OGRN = dto.OGRN;
+            org.Address = dto.Address;
+            org.Phone = dto.Phone;
+            org.Email = dto.Email;
+            org.Type = dto.Type;
+            org.PrimaryContactId = dto.PrimaryContactId;
+
             await _context.SaveChangesAsync();
-            return existing;
+            return true;
         }
 
+        /// <summary>
+        /// Удалить организацию по Id. Возвращает true, если удалена.
+        /// </summary>
         public async Task<bool> DeleteAsync(Guid id)
         {
             var org = await _context.Organizations.FindAsync(id);

@@ -16,13 +16,6 @@ namespace MyStock.Controllers
             _context = context;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<ProductCategoryDto>>> GetAll()
-        {
-            var categories = await _context.ProductCategories.ToListAsync();
-            return Ok(categories.Select(Map));
-        }
-
         [HttpGet("{id}")]
         public async Task<ActionResult<ProductCategoryDto>> GetById(Guid id)
         {

@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using MyStock.Json;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MyStock.Entities
 {
@@ -22,26 +24,30 @@ namespace MyStock.Entities
         public string? Comment { get; set; }
         public ICollection<OrderItem> Items { get; set; } = new List<OrderItem>();
     }
+
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum OrderType
     {
         [Display(Name = "Приход")]
-        Incoming,
+        Incoming = 0,
 
         [Display(Name = "Расход")]
-        Outgoing,
+        Outgoing = 1,
 
         [Display(Name = "Списание")]
-        WriteOff,
+        WriteOff = 2
     }
+
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum OrderStatus
     {
         [Display(Name = "Черновик")]
-        Draft,
+        Draft = 0,
 
         [Display(Name = "Проведён")]
-        Approved,
+        Approved = 1,
 
         [Display(Name = "Отменён")]
-        Cancelled
+        Cancelled = 2
     }
 }

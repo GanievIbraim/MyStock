@@ -1,50 +1,51 @@
-﻿using MyStock.Services;
-using MyStock.Entities;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using MyStock.Dto;
 using MyStock.DTO;
+using MyStock.Services;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace MyStock.Controllers
 {
     [ApiController]
-    [Route("api/warehouse")]
-    public class WarehouseController : ControllerBase
+    [Route("api/warehouse-section")]
+    public class WarehouseSectionController : ControllerBase
     {
-        private readonly WarehouseService _service;
+        private readonly WarehouseSectionService _service;
 
-        public WarehouseController(WarehouseService service)
+        public WarehouseSectionController(WarehouseSectionService service)
         {
             _service = service;
         }
 
         /// <summary>
-        /// Получить список складов
+        /// Получить все секции
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<WarehouseDto>>> GetAll()
-        {
-            return Ok(await _service.GetAllAsync());
-        }
+        public async Task<ActionResult<IEnumerable<WarehouseSectionDto>>> GetAll()
+            => Ok(await _service.GetAllAsync());
 
         /// <summary>
-        /// Получить склад по Id
+        /// Получить секцию по Id
         /// </summary>
-        [HttpGet("{id}")]
-        public async Task<ActionResult<WarehouseDto>> GetById(Guid id)
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<WarehouseSectionDto>> GetById(Guid id)
         {
-            var warehouse = await _service.GetByIdAsync(id);
-            return warehouse == null ? NotFound() : Ok(warehouse);
+            var dto = await _service.GetByIdAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
         }
 
         /// <summary>
-        /// Создать новый склад
+        /// Создать новую секцию склада
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult> Create([FromBody] CreateWarehouseDto dto)
+        public async Task<ActionResult<WarehouseSectionDto>> Create([FromBody] CreateWarehouseSectionDto dto)
         {
             try
             {
                 var id = await _service.CreateAsync(dto);
-                return CreatedAtAction(nameof(GetById), new { id }, id);
+                return CreatedAtAction(nameof(GetById), new { id }, null);
             }
             catch (KeyNotFoundException knf)
             {
@@ -57,10 +58,10 @@ namespace MyStock.Controllers
         }
 
         /// <summary>
-        /// Обновить склад
+        /// Обновить секцию склада
         /// </summary>
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] CreateWarehouseDto dto)
+        [HttpPut("{id:guid}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] CreateWarehouseSectionDto dto)
         {
             try
             {
@@ -78,9 +79,9 @@ namespace MyStock.Controllers
         }
 
         /// <summary>
-        /// Удалить склад
+        /// Удалить секцию склада
         /// </summary>
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var deleted = await _service.DeleteAsync(id);

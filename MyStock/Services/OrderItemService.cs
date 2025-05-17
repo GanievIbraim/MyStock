@@ -1,6 +1,11 @@
-﻿using Microsoft.EntityFrameworkCore;
-using MyStock.Entities;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using MyStock.DTO;
+using MyStock.Entities;
+using MyStock.Utils;
 
 namespace MyStock.Services
 {
@@ -13,85 +18,108 @@ namespace MyStock.Services
             _context = context;
         }
 
-        public async Task<OrderItem> CreateAsync(CreateOrderItemDto dto)
+        private IQueryable<OrderItemDto> ItemProjection =>
+            _context.OrderItems
+                .AsNoTracking()
+                .Include(i => i.Product)
+                .Include(i => i.Order)
+                .Include(i => i.Section)
+                .Select(i => new OrderItemDto
+                {
+                    OrderId = i.OrderId,
+                    OrderName = i.Order.Number,
+                    ProductId = i.ProductId,
+                    ProductName = i.Product.Name,
+                    Quantity = i.Quantity,
+                    Price = i.Price,
+                    SectionId = i.SectionId,
+                    SectionName = i.Section != null ? i.Section.Code : string.Empty
+                });
+       
+        /// <summary>
+        /// Получить все позиции по заданному заказу.
+        /// </summary>
+        public async Task<List<OrderItemDto>> GetByOrderIdAsync(Guid orderId)
         {
-            // Проверка существования заказа
-            var order = await _context.Orders.FindAsync(dto.OrderId);
-            if (order == null)
-                throw new ArgumentException("Заказ не найден");
+            await ServiceUtils.EnsureExistsAsync(_context.Orders, orderId, "Заказ");
 
-            // Проверка существования товара
-            var product = await _context.Products.FindAsync(dto.ProductId);
-            if (product == null)
-                throw new ArgumentException("Товар не найден");
+            return await ItemProjection
+                .Where(i => i.OrderId == orderId)
+                .ToListAsync();
+        }
 
-            // Проверка секции (опционально)
-            WarehouseSection section = null;
-            if (dto.SectionId.HasValue)
-            {
-                section = await _context.WarehouseSections.FindAsync(dto.SectionId.Value);
-                if (section == null)
-                    throw new ArgumentException("Секция не найдена");
-            }
+        /// <summary>
+        /// Получить позицию по Id.
+        /// </summary>
+        public async Task<OrderItemDto?> GetByIdAsync(Guid id)
+            => await ItemProjection.FirstOrDefaultAsync(e => e.Id == id);
+
+        /// <summary>
+        /// Добавить одну позицию к заказу. Возвращает её Id.
+        /// </summary>
+        public async Task<Guid> CreateAsync(CreateOrderItemDto dto)
+        {
+
+            await ServiceUtils.EnsureExistsAsync(_context.Orders, dto.OrderId, "Заказ");
+            await ServiceUtils.EnsureExistsAsync(_context.Products, dto.ProductId, "Товар");
+
+            await ServiceUtils.EnsureExistsAsync(_context.WarehouseSections, dto.SectionId, "Секция склада");
 
             var item = new OrderItem
             {
                 Id = Guid.NewGuid(),
                 OrderId = dto.OrderId,
                 ProductId = dto.ProductId,
-                Quantity = (int)dto.Quantity,
+                Quantity = dto.Quantity,
                 Price = dto.Price,
                 SectionId = dto.SectionId
             };
 
             _context.OrderItems.Add(item);
             await _context.SaveChangesAsync();
-            return item;
+            return item.Id;
         }
 
-        public async Task<IEnumerable<OrderItem>> CreateManyAsync(IEnumerable<CreateOrderItemDto> dtos)
+        /// <summary>
+        /// Добавить сразу несколько позиций.
+        /// </summary>
+        public async Task<List<Guid>> CreateManyAsync(IEnumerable<CreateOrderItemDto> dtos)
         {
-            var items = new List<OrderItem>();
+            var result = new List<Guid>();
             foreach (var dto in dtos)
             {
-                var item = await CreateAsync(dto);
-                items.Add(item);
+                var id = await CreateAsync(dto);
+                result.Add(id);
             }
-            return items;
+            return result;
         }
 
-        public async Task<OrderItem?> UpdateAsync(Guid id, CreateOrderItemDto dto)
+        /// <summary>
+        /// Обновить существующую позицию. Возвращает true, если нашли и обновили.
+        /// </summary>
+        public async Task<bool> UpdateAsync(Guid id, CreateOrderItemDto dto)
         {
             var existing = await _context.OrderItems.FindAsync(id);
             if (existing == null)
-                return null;
+                return false;
 
-            // Валидация аналогично CreateAsync
-            var order = await _context.Orders.FindAsync(dto.OrderId);
-            if (order == null)
-                throw new ArgumentException("Заказ не найден");
-
-            var product = await _context.Products.FindAsync(dto.ProductId);
-            if (product == null)
-                throw new ArgumentException("Товар не найден");
-
-            if (dto.SectionId.HasValue)
-            {
-                var section = await _context.WarehouseSections.FindAsync(dto.SectionId.Value);
-                if (section == null)
-                    throw new ArgumentException("Секция не найдена");
-            }
+            await ServiceUtils.EnsureExistsAsync(_context.Orders, dto.OrderId, "Заказ");
+            await ServiceUtils.EnsureExistsAsync(_context.Products, dto.ProductId, "Товар");
+            await ServiceUtils.EnsureExistsAsync(_context.WarehouseSections, dto.SectionId, "Секция склада");
 
             existing.OrderId = dto.OrderId;
             existing.ProductId = dto.ProductId;
-            existing.Quantity = (int)dto.Quantity;
+            existing.Quantity = dto.Quantity;
             existing.Price = dto.Price;
             existing.SectionId = dto.SectionId;
 
             await _context.SaveChangesAsync();
-            return existing;
+            return true;
         }
 
+        /// <summary>
+        /// Удалить позицию по Id. Возвращает true, если удалили.
+        /// </summary>
         public async Task<bool> DeleteAsync(Guid id)
         {
             var existing = await _context.OrderItems.FindAsync(id);
@@ -101,27 +129,6 @@ namespace MyStock.Services
             _context.OrderItems.Remove(existing);
             await _context.SaveChangesAsync();
             return true;
-        }
-
-        public async Task<IEnumerable<OrderItemDto>> GetByOrderIdAsync(Guid orderId)
-        {
-            return await _context.OrderItems
-                .Where(i => i.OrderId == orderId)
-                .Include(i => i.Product)
-                .Include(i => i.Order)
-                .Include(i => i.Section)
-                .Select(i => new OrderItemDto
-                {
-                    ProductId = i.ProductId,
-                    ProductName = i.Product.Name,
-                    OrderId = i.OrderId,
-                    OrderName = i.Order.Number,
-                    Quantity = i.Quantity,
-                    Price = i.Price,
-                    SectionId = i.SectionId,
-                    SectionName = i.Section != null ? i.Section.Code : string.Empty
-                })
-                .ToListAsync();
         }
     }
 }

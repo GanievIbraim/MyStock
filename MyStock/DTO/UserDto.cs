@@ -4,15 +4,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MyStock.DTO
 {
-    public class UserDto
-    {
-        public Guid Id { get; set; }
-        public string Login { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
-        public bool IsActive { get; set; }
-        public ReferenceDto? Contact { get; set; }
-    }
-
     public class CreateUserDto
     {
         [Required]
@@ -22,11 +13,19 @@ namespace MyStock.DTO
         public string Password { get; set; } = string.Empty;
 
         [Required]
-        public string Role { get; set; } = string.Empty;
+        public UserRole Role { get; set; } = default!;
 
         public Guid? ContactId { get; set; }
     }
-
+    public class UserDto
+    {
+        public Guid Id { get; set; }
+        public string Login { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        
+        public CodeDisplayDto Role { get; set; } = default!;
+        public ReferenceDto? Contact { get; set; }
+    }
     public class LoginDto
     {
         [Required]
@@ -35,11 +34,10 @@ namespace MyStock.DTO
         [Required]
         public string Password { get; set; } = string.Empty;
     }
-
     public class LoginResultDto
     {
         public Guid Id { get; set; }
         public string Login { get; set; } = string.Empty;
-        public string Role { get; set; } = string.Empty;
+        public CodeDisplayDto Role { get; set; } = default!;
     }
 }

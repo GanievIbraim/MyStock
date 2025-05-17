@@ -1,45 +1,40 @@
-﻿using MyStock.Services;
-using MyStock.Entities;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using MyStock.DTO;
+using MyStock.Services;
 
 namespace MyStock.Controllers
 {
     [ApiController]
-    [Route("api/warehouse")]
-    public class WarehouseController : ControllerBase
+    [Route("api/employees")]
+    public class EmployeesController : ControllerBase
     {
-        private readonly WarehouseService _service;
+        private readonly EmployeeService _service;
 
-        public WarehouseController(WarehouseService service)
-        {
-            _service = service;
-        }
+        public EmployeesController(EmployeeService service)
+            => _service = service;
 
         /// <summary>
-        /// Получить список складов
+        /// Получить всех сотрудников
         /// </summary>
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<WarehouseDto>>> GetAll()
-        {
-            return Ok(await _service.GetAllAsync());
-        }
+        public async Task<ActionResult<IEnumerable<EmployeeDto>>> GetAll()
+            => Ok(await _service.GetAllAsync());
 
         /// <summary>
-        /// Получить склад по Id
+        /// Получить сотрудника по Id
         /// </summary>
-        [HttpGet("{id}")]
-        public async Task<ActionResult<WarehouseDto>> GetById(Guid id)
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<EmployeeDto>> GetById(Guid id)
         {
-            var warehouse = await _service.GetByIdAsync(id);
-            return warehouse == null ? NotFound() : Ok(warehouse);
+            var dto = await _service.GetByIdAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
         }
 
         /// <summary>
-        /// Создать новый склад
+        /// Создать нового сотрудника
         /// </summary>
         [HttpPost]
-        public async Task<ActionResult> Create([FromBody] CreateWarehouseDto dto)
+        public async Task<IActionResult> Create([FromBody] CreateEmployeeDto dto)
         {
             try
             {
@@ -57,10 +52,10 @@ namespace MyStock.Controllers
         }
 
         /// <summary>
-        /// Обновить склад
+        /// Обновить сотрудника
         /// </summary>
-        [HttpPut("{id}")]
-        public async Task<IActionResult> Update(Guid id, [FromBody] CreateWarehouseDto dto)
+        [HttpPut("{id:guid}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] CreateEmployeeDto dto)
         {
             try
             {
@@ -78,9 +73,9 @@ namespace MyStock.Controllers
         }
 
         /// <summary>
-        /// Удалить склад
+        /// Удалить сотрудника
         /// </summary>
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:guid}")]
         public async Task<IActionResult> Delete(Guid id)
         {
             var deleted = await _service.DeleteAsync(id);

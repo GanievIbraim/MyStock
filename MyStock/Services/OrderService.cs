@@ -1,7 +1,12 @@
-﻿using MyStock.DTO;
-using MyStock.Entities;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using System.Linq.Expressions;
+using MyStock.DTO;
+using MyStock.Entities;
+using MyStock.Extensions;
+using MyStock.Utils;
 
 namespace MyStock.Services
 {
@@ -10,196 +15,154 @@ namespace MyStock.Services
         private readonly AppDbContext _context;
 
         public OrderService(AppDbContext context)
-        {
-            _context = context;
-        }
+            => _context = context;
 
-        public async Task<IEnumerable<OrderResponseDto>> GetAllAsync()
-        {
-            return await _context.Orders
+        private IQueryable<OrderDto> OrderProjection =>
+            _context.Orders
+                .AsNoTracking()
+                .Include(o => o.Organization)
                 .Include(o => o.Contact)
                 .Include(o => o.Warehouse)
-                .Include(o => o.Organization)
-                .Select(OrderMappings.ToResponseDto())
-                .ToListAsync();
-        }
+                .Select(o => new OrderDto
+                {
+                    Id = o.Id,
+                    Number = o.Number,
+                    ApprovedAt = o.ApprovedAt,
+                    Type = o.Type.ToCodeDisplay(),
+                    Status = o.Status.ToCodeDisplay(),
+                    Organization = o.Organization != null ? o.Organization.ToRef() : null,
+                    Contact = o.Contact != null ? o.Contact.ToRef() : null,
+                    Warehouse = o.Warehouse != null ? o.Warehouse.ToRef() : null,
+                    Comment = o.Comment
+                });
 
-        public async Task<OrderResponseDto?> GetByIdAsync(Guid id)
+        /// <summary>
+        /// Все заказы
+        /// </summary>
+        public async Task<List<OrderDto>> GetAllAsync()
+            => await OrderProjection.ToListAsync();
+
+        /// <summary>
+        /// Заказ по Id
+        /// </summary>
+        public async Task<OrderDto?> GetByIdAsync(Guid id)
+            => await OrderProjection
+                .FirstOrDefaultAsync(o => o.Id == id);
+
+        /// <summary>
+        /// Создать заказ
+        /// </summary>
+        public async Task<Guid> CreateAsync(CreateOrderDto dto)
         {
-            return await _context.Orders
-                .Include(o => o.Contact)
-                .Include(o => o.Warehouse)
-                .Include(o => o.Organization)
-                .Where(o => o.Id == id)
-                .Select(OrderMappings.ToResponseDto())
-                .FirstOrDefaultAsync();
-        }
+            EnumUtils.EnsureEnumDefined(dto.Type, nameof(dto.Type));
+            EnumUtils.EnsureEnumDefined(dto.Status, nameof(dto.Status));
 
-        public async Task<IEnumerable<OrderResponseDto>> FilterByTypeAsync(OrganizationType type)
-        {
-            return await _context.Orders
-                .Include(o => o.Contact)
-                .Include(o => o.Warehouse)
-                .Include(o => o.Organization)
-                .Where(o => o.Organization != null && o.Organization.Type == type)
-                .Select(OrderMappings.ToResponseDto())
-                .ToListAsync();
-        }
-
-        public async Task<Order> CreateAsync(CreateOrderDto dto)
-        {
-            Guid warehouseId = await CheckWarkhouse(dto.WarehouseId.Value);
-            Guid organizationId = await CheckOrganization(dto.OrganizationId.Value);
-            Guid contactId = await CheckContact(dto.ContactId.Value);
-
-            if (contactId == Guid.Empty && organizationId == Guid.Empty)
-            {
-                throw new ArgumentException("Необходимо указать хотя бы организацию или контакт.");
-            }
+            await ServiceUtils.EnsureExistsAsync(_context.Warehouses, dto.WarehouseId, "Склад");
+            await ServiceUtils.EnsureExistsAsync(_context.Organizations, dto.OrganizationId, "Организация");
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.ContactId, "Контакт");
 
             var order = new Order
             {
+                Id = Guid.NewGuid(),
                 Number = dto.Number,
                 Type = dto.Type,
-                Status = OrderStatus.Draft,
+                Status = dto.Status,
                 Comment = dto.Comment,
                 ApprovedAt = null,
-                WarehouseId = warehouseId,
-                OrganizationId = organizationId,
-                ContactId = contactId
+                WarehouseId = dto.WarehouseId!.Value,
+                OrganizationId = dto.OrganizationId,
+                ContactId = dto.ContactId
             };
 
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
-
-            return order;
+            return order.Id;
         }
 
-        public async Task<Order?> UpdateAsync(Guid id, CreateOrderDto dto)
+        /// <summary>Обновить заказ</summary>
+        public async Task<bool> UpdateAsync(Guid id, CreateOrderDto dto)
         {
-            var existing = await _context.Orders.FindAsync(id);
-            if (existing == null) return null;
+            var o = await _context.Orders.FindAsync(id);
+            if (o == null) return false;
 
-            Guid warehouseId = await CheckWarkhouse(dto.WarehouseId.Value);
-            Guid organizationId = await CheckOrganization(dto.OrganizationId.Value);
-            Guid contactId = await CheckContact(dto.ContactId.Value);
+            EnumUtils.EnsureEnumDefined(dto.Type, nameof(dto.Type));
+            EnumUtils.EnsureEnumDefined(dto.Status, nameof(dto.Status));
 
-            if (contactId == Guid.Empty && organizationId == Guid.Empty)
-                throw new ArgumentException("Необходимо указать хотя бы организацию или контакт.");
+            await ServiceUtils.EnsureExistsAsync(_context.Warehouses, dto.WarehouseId, "Склад");
+            await ServiceUtils.EnsureExistsAsync(_context.Organizations, dto.OrganizationId, "Организация");
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.ContactId, "Контакт");
 
-            existing.Number = dto.Number;
-            existing.Type = dto.Type;
-            existing.Comment = dto.Comment;
-            existing.WarehouseId = warehouseId;
-            existing.OrganizationId = organizationId;
-            existing.ContactId = contactId;
+            o.Number = dto.Number;
+            o.Type = dto.Type;
+            o.Status = dto.Status;
+            o.Comment = dto.Comment;
+            o.WarehouseId = dto.WarehouseId!.Value;
+            o.OrganizationId = dto.OrganizationId;
+            o.ContactId = dto.ContactId;
 
-            await _context.SaveChangesAsync();
-            return existing;
-        }
-
-        public async Task<bool> DeleteAsync(Guid id)
-        {
-            var order = await _context.Orders.FindAsync(id);
-            if (order == null) return false;
-
-            _context.Orders.Remove(order);
             await _context.SaveChangesAsync();
             return true;
         }
 
-        public async Task<ApprovedOrderDto> ApproveAsync(Guid orderId)
+        /// <summary>
+        /// Удалить заказ
+        /// </summary>
+        public async Task<bool> DeleteAsync(Guid id)
         {
-            var order = await _context.Orders
-                .Include(o => o.Items)
-                .FirstOrDefaultAsync(o => o.Id == orderId);
+            var o = await _context.Orders.FindAsync(id);
+            if (o == null) return false;
 
-            if (order == null)
-                throw new KeyNotFoundException($"Order {orderId} not found.");
+            _context.Orders.Remove(o);
+            await _context.SaveChangesAsync();
+            return true;
+        }
 
-            if (order.Status != OrderStatus.Draft)
-                throw new InvalidOperationException("Only Draft orders can be approved.");
+        /// <summary>
+        /// Подтвердить заказ
+        /// </summary>
+        public async Task<ApprovedOrderDto> ApproveAsync(Guid id)
+        {
+            var o = await _context.Orders
+                .Include(x => x.Items)
+                .FirstOrDefaultAsync(x => x.Id == id);
+
+            if (o == null)
+                throw new KeyNotFoundException("Заказ не найден");
+
+            if (o.Status != OrderStatus.Draft)
+                throw new InvalidOperationException("Можно подтверждать только черновики");
 
             await using var tx = await _context.Database.BeginTransactionAsync();
 
-            foreach (var item in order.Items)
+            foreach (var item in o.Items)
             {
-                var orderItem = await _context.OrderItems
+                var inv = await _context.OrderItems
                     .FirstOrDefaultAsync(ii => ii.ProductId == item.ProductId);
+                if (inv == null)
+                    throw new InvalidOperationException($"Нет запаса для товара {item.ProductId}");
 
-                if (orderItem == null)
-                    throw new InvalidOperationException($"No inventory record for product {item.ProductId}");
-
-                switch (order.Type)
+                if (o.Type == OrderType.Incoming)
+                    inv.Quantity += item.Quantity;
+                else
                 {
-                    case OrderType.Incoming:
-                        orderItem.Quantity += item.Quantity;
-                        break;
-
-                    case OrderType.Outgoing:
-                    case OrderType.WriteOff:
-                        if (orderItem.Quantity < item.Quantity)
-                            throw new InvalidOperationException(
-                                $"Insufficient stock for product {item.ProductId}: available {orderItem.Quantity}, required {item.Quantity}");
-
-                        orderItem.Quantity -= item.Quantity;
-                        break;
-
-                    default:
-                        throw new ArgumentOutOfRangeException(nameof(order.Type), order.Type, "Unknown order type");
+                    if (inv.Quantity < item.Quantity)
+                        throw new InvalidOperationException(
+                            $"Недостаточно запаса {inv.Quantity} < {item.Quantity}");
+                    inv.Quantity -= item.Quantity;
                 }
             }
 
-            order.Status = OrderStatus.Approved;
-            order.ApprovedAt = DateTime.UtcNow;
+            o.Status = OrderStatus.Approved;
+            o.ApprovedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
             await tx.CommitAsync();
 
             return new ApprovedOrderDto
             {
-                Id = order.Id,
-                Status = order.Status,
-                ApprovedAt = order.ApprovedAt.Value
-            };
-        }
-
-        public async Task<Guid> CheckWarkhouse(Guid id)
-        {
-            var warehouse = await _context.Warehouses.FindAsync(id);
-            return warehouse?.Id ?? Guid.Empty;
-        }
-
-        public async Task<Guid> CheckOrganization(Guid id)
-        {
-            var organization = await _context.Organizations.FindAsync(id);
-            return organization?.Id ?? Guid.Empty;
-        }
-        public async Task<Guid> CheckContact(Guid id)
-        {
-            var contact = await _context.Contacts.FindAsync(id);
-            return contact?.Id ?? Guid.Empty;
-        }
-    }
-
-    public static class OrderMappings
-    {
-        public static Expression<Func<Order, OrderResponseDto>> ToResponseDto()
-        {
-            return o => new OrderResponseDto
-            {
                 Id = o.Id,
-                Type = o.Type,
-                Status = o.Status,
-                Number = o.Number,
-                Comment = o.Comment,
-                ContactId = o.ContactId,
-                ApprovedAt = o.ApprovedAt,
-                ContactName = o.Contact != null ? o.Contact.FullName : null,
-                WarehouseId = o.WarehouseId,
-                WarehouseName = o.Warehouse != null ? o.Warehouse.Name : string.Empty,
-                OrganizationId = o.OrganizationId,
-                OrganizationName = o.Organization != null ? o.Organization.Name : string.Empty
+                Status = o.Status.ToCodeDisplay(),
+                ApprovedAt = o.ApprovedAt!.Value
             };
         }
     }

@@ -1,8 +1,12 @@
-using DotNetEnv;
-using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 using MyStock.Middleware;
 using MyStock.Entities;
 using MyStock.Services;
+
+using DotNetEnv;
+using Microsoft.EntityFrameworkCore;
 
 var rawEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
 var envFile = $".env.{rawEnv.ToLower()}";
@@ -36,6 +40,8 @@ builder.Services.AddScoped<ProductService>();
 builder.Services.AddScoped<WarehouseSectionService>();
 builder.Services.AddScoped<WarehouseService>();
 builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<ContactService>();
+builder.Services.AddScoped<EmployeeService>();
 
 var app = builder.Build();
 

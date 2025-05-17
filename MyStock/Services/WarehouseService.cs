@@ -1,7 +1,12 @@
-﻿using MyStock.DTO;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using MyStock.DTO;
 using MyStock.Entities;
 using MyStock.Extensions;
-using Microsoft.EntityFrameworkCore;
+using MyStock.Utils;
 
 namespace MyStock.Services
 {
@@ -10,84 +15,85 @@ namespace MyStock.Services
         private readonly AppDbContext _context;
 
         public WarehouseService(AppDbContext context)
-        {
-            _context = context;
-        }
+            => _context = context;
 
-        public async Task<IEnumerable<WarehouseDto>> GetAllAsync()
-        {
-            return await _context.Warehouses
+        private IQueryable<WarehouseDto> WarehouseProjection =>
+            _context.Warehouses
+                .AsNoTracking()
                 .Include(w => w.Owner)
                 .Select(w => new WarehouseDto
                 {
+                    Id = w.Id,
                     Name = w.Name,
                     Address = w.Address,
                     Description = w.Description,
-                    Owner = w.Owner.ToRef()
+                    Owner = w.Owner != null ? w.Owner.ToRef() : null
+                });
 
+        /// <summary>
+        /// Получить все склады
+        /// </summary>
+        public async Task<List<WarehouseDto>> GetAllAsync()
+            => await WarehouseProjection.ToListAsync();
 
-                })
-                .ToListAsync();
-        }
-
+        /// <summary>
+        /// Получить склад по Id
+        /// </summary>
         public async Task<WarehouseDto?> GetByIdAsync(Guid id)
-        {
-            return await _context.Warehouses
-                .Include(w => w.Owner)
-                .Where(w => w.Id == id)
-                .Select(w => new WarehouseDto
-                {
-                    Name = w.Name,
-                    Address = w.Address,
-                    Description = w.Description,
-                    Owner = w.Owner.ToRef()
-                })
-                .FirstOrDefaultAsync();
-        }
+            => await WarehouseProjection
+                .FirstOrDefaultAsync(w => w.Id == id);
 
-        public async Task<Warehouse> CreateAsync(CreateWarehouseDto dto)
+        /// <summary>
+        /// Создать новый склад (возвращает Id)
+        /// </summary>
+        public async Task<Guid> CreateAsync(CreateWarehouseDto dto)
         {
-            if (dto.OwnerId == null || !await _context.Users.AnyAsync(u => u.Id == dto.OwnerId))
-                throw new KeyNotFoundException("Пользователь (владелец) не найден");
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.OwnerId, "Пользователь (владелец)");
 
             var entity = new Warehouse
             {
+                Id = Guid.NewGuid(),
                 Name = dto.Name,
                 Address = dto.Address,
                 Description = dto.Description,
-                OwnerId = dto.OwnerId.Value
+                OwnerId = dto.OwnerId!.Value
             };
 
             _context.Warehouses.Add(entity);
             await _context.SaveChangesAsync();
-            return entity;
+            return entity.Id;
         }
 
-        public async Task<bool> DeleteAsync(Guid id)
+        /// <summary>
+        /// Обновить склад. Возвращает true, если найден и обновлён.
+        /// </summary>
+        public async Task<bool> UpdateAsync(Guid id, CreateWarehouseDto dto)
         {
-            var warehouse = await _context.Warehouses.FindAsync(id);
-            if (warehouse == null) return false;
+            var w = await _context.Warehouses.FindAsync(id);
+            if (w == null) return false;
 
-            _context.Warehouses.Remove(warehouse);
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.OwnerId, "Пользователь (владелец)");
+
+            w.Name = dto.Name;
+            w.Address = dto.Address;
+            w.Description = dto.Description;
+            w.OwnerId = dto.OwnerId!.Value;
+
             await _context.SaveChangesAsync();
             return true;
         }
 
-        public async Task<Warehouse?> UpdateAsync(Guid id, CreateWarehouseDto dto)
+        /// <summary>
+        /// Удалить склад. Возвращает true, если удалён.
+        /// </summary>
+        public async Task<bool> DeleteAsync(Guid id)
         {
-            var warehouse = await _context.Warehouses.FindAsync(id);
-            if (warehouse == null) return null;
+            var w = await _context.Warehouses.FindAsync(id);
+            if (w == null) return false;
 
-            if (dto.OwnerId == null || !await _context.Users.AnyAsync(u => u.Id == dto.OwnerId))
-                throw new KeyNotFoundException("Пользователь (владелец) не найден");
-
-            warehouse.Name = dto.Name;
-            warehouse.Address = dto.Address;
-            warehouse.Description = dto.Description;
-            warehouse.OwnerId = dto.OwnerId.Value;
-
+            _context.Warehouses.Remove(w);
             await _context.SaveChangesAsync();
-            return warehouse;
+            return true;
         }
     }
 }

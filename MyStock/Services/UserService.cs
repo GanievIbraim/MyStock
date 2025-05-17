@@ -1,9 +1,14 @@
-﻿using MyStock.DTO;
-using MyStock.Entities;
-using MyStock.Extensions;
-using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using MyStock.DTO;
+using MyStock.Entities;
+using MyStock.Extensions;
+using MyStock.Utils;
 
 namespace MyStock.Services
 {
@@ -12,79 +17,85 @@ namespace MyStock.Services
         private readonly AppDbContext _context;
 
         public UserService(AppDbContext context)
-        {
-            _context = context;
-        }
+            => _context = context;
 
-        public async Task<IEnumerable<UserDto>> GetAllAsync()
-        {
-            return await _context.Users
+        private IQueryable<UserDto> UserProjection =>
+            _context.Users
+                .AsNoTracking()
                 .Include(u => u.Contact)
                 .Select(u => new UserDto
                 {
                     Id = u.Id,
                     Login = u.Login,
-                    Role = u.Role.ToString(),
+                    Role = u.Role.ToCodeDisplay(),
                     IsActive = u.IsActive,
                     Contact = u.Contact != null ? u.Contact.ToRef() : null
-                })
-                .ToListAsync();
-        }
+                });
 
+        /// <summary>
+        /// Все пользователи
+        /// </summary>
+        public async Task<List<UserDto>> GetAllAsync()
+            => await UserProjection.ToListAsync();
+
+        /// <summary>
+        /// Пользователь по Id
+        /// </summary>
         public async Task<UserDto?> GetByIdAsync(Guid id)
-        {
-            var user = await _context.Users
-                .Include(u => u.Contact)
+            => await UserProjection
                 .FirstOrDefaultAsync(u => u.Id == id);
 
-            return user == null ? null : new UserDto
-            {
-                Id = user.Id,
-                Login = user.Login,
-                Role = user.Role.ToString(),
-                IsActive = user.IsActive,
-                Contact = user.Contact?.ToRef()
-            };
-        }
-
-        public async Task<User> CreateAsync(CreateUserDto dto)
+        /// <summary>
+        /// Создать пользователя (возвращает новый Id)
+        /// </summary>
+        public async Task<Guid> CreateAsync(CreateUserDto dto)
         {
             if (await _context.Users.AnyAsync(u => u.Login == dto.Login))
                 throw new InvalidOperationException("Пользователь с таким логином уже существует");
+
+            EnumUtils.EnsureEnumDefined(dto.Role, nameof(dto.Role));
+
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.ContactId, "Контакт");
 
             var user = new User
             {
                 Id = Guid.NewGuid(),
                 Login = dto.Login,
                 PasswordHash = HashPassword(dto.Password),
-                Role = Enum.Parse<UserRole>(dto.Role, true),
+                Role = dto.Role,
                 IsActive = true,
                 ContactId = dto.ContactId
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
-            return user;
+            return user.Id;
         }
 
-        public async Task<User?> UpdateStatus(Guid id, bool isActive)
+        /// <summary>
+        /// Включить/выключить активность (true – active)
+        /// </summary>
+        public async Task<bool> UpdateStatusAsync(Guid id, bool isActive)
         {
             var user = await _context.Users.FindAsync(id);
-            if (user == null) return null;
+            if (user == null) return false;
 
             user.IsActive = isActive;
             await _context.SaveChangesAsync();
-            return user;
+            return true;
         }
 
+        /// <summary>
+        /// Попытка логина: возвращает Id, Login и роль в CodeDisplayDto
+        /// </summary>
         public async Task<LoginResultDto> LoginAsync(LoginDto dto)
         {
-            var passwordHash = HashPassword(dto.Password);
+            var hash = HashPassword(dto.Password);
 
             var user = await _context.Users
                 .FirstOrDefaultAsync(u =>
                     u.Login == dto.Login &&
-                    u.PasswordHash == passwordHash &&
+                    u.PasswordHash == hash &&
                     u.IsActive);
 
             if (user == null)
@@ -94,10 +105,13 @@ namespace MyStock.Services
             {
                 Id = user.Id,
                 Login = user.Login,
-                Role = user.Role.ToString()
+                Role = user.Role.ToCodeDisplay()
             };
         }
 
+        /// <summary>
+        /// Хэшируем пароль через SHA256 → Base64
+        /// <summary>
         private static string HashPassword(string password)
         {
             using var sha = SHA256.Create();

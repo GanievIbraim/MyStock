@@ -1,4 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using MyStock.DTO;
+using MyStock.Json;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MyStock.Entities
 {
@@ -19,18 +22,20 @@ namespace MyStock.Entities
         public ICollection<Contact> Contacts { get; set; } = new List<Contact>();
         public ICollection<Order> Orders { get; set; } = new List<Order>();
     }
+
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum OrganizationType
     {
         [Display(Name = "Покупатель")]
-        Customer,
+        Customer = 0,
 
         [Display(Name = "Поставщик")]
-        Supplier,
+        Supplier = 1,
 
         [Display(Name = "Партнер")]
-        Partner,
+        Partner = 2,
 
         [Display(Name = "Подрядчик")]
-        Contractor
+        Contractor = 3
     }
 }

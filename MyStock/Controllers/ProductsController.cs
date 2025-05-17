@@ -1,108 +1,124 @@
 ﻿using MyStock.Entities;
 using Microsoft.AspNetCore.Mvc;
 using MyStock.DTO;
+using MyStock.Extensions;
+using MyStock.Services;
 
-[Route("api/products")]
-[ApiController]
-public class ProductsController : ControllerBase
+namespace MyStock.Controllers
 {
-    private readonly ProductService _service;
-
-    public ProductsController(ProductService service)
+    [Route("api/products")]
+    [ApiController]
+    public class ProductsController : ControllerBase
     {
-        _service = service;
-    }
+        private readonly ProductService _service;
 
-    [HttpGet]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll()
-    {
-        var products = await _service.GetAllAsync();
-        return Ok(products.Select(p => Map(p)));
-    }
-
-    [HttpGet("{id}")]
-    public async Task<ActionResult<ProductDto>> GetById(Guid id)
-    {
-        var product = await _service.GetByIdAsync(id);
-        return product == null ? NotFound() : Ok(Map(product));
-    }
-
-    [HttpGet("barcode/{barcode}")]
-    public async Task<ActionResult<ProductDto>> GetByBarcode(string barcode)
-    {
-        var product = await _service.GetByBarcodeAsync(barcode);
-        return product == null ? NotFound() : Ok(Map(product));
-    }
-
-    [HttpPost]
-    public async Task<ActionResult<ProductDto>> Create([FromBody] CreateProductDto dto)
-    {
-        var product = new Product
+        public ProductsController(ProductService service)
         {
-            Id = Guid.NewGuid(),
-            Name = dto.Name,
-            Code = dto.Code,
-            Barcode = dto.Barcode,
-            Description = dto.Description,
-            Quantity = dto.Quantity,
-            Price = dto.Price,
-            Unit = dto.Unit,
-            CategoryId = dto.CategoryId,
-            SupplierId = dto.SupplierId,
-            SectionId = dto.SectionId
-        };
+            _service = service;
+        }
 
-        var created = await _service.CreateAsync(product);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, Map(created));
-    }
+        /// <summary>
+        /// Получить список товаров
+        /// </summary>
+        [HttpGet]
+        public async Task<ActionResult<IEnumerable<ProductDto>>> GetAll()
+            => Ok(await _service.GetAllAsync());
 
-    [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] CreateProductDto dto)
-    {
-        var product = new Product
+        /// <summary>
+        /// Получить товар по Id
+        /// </summary>
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<ProductDto>> GetById(Guid id)
         {
-            Name = dto.Name,
-            Code = dto.Code,
-            Barcode = dto.Barcode,
-            Description = dto.Description,
-            Quantity = dto.Quantity,
-            Price = dto.Price,
-            Unit = dto.Unit,
-            CategoryId = dto.CategoryId,
-            SupplierId = dto.SupplierId,
-            SectionId = dto.SectionId
+            var dto = await _service.GetByIdAsync(id);
+            return dto == null ? NotFound() : Ok(dto);
+        }
+
+        /// <summary>
+        /// Получить товар по артикулу
+        /// </summary>
+        [HttpGet("barcode/{barcode}")]
+        public async Task<ActionResult<ProductDto>> GetByBarcode(string barcode)
+        {
+            var product = await _service.GetByBarcodeAsync(barcode);
+            return product == null ? NotFound() : Ok(product);
+        }
+
+        /// <summary>
+        /// Создать товар
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> Create([FromBody] CreateProductDto dto)
+        {
+            try
+            {
+                var id = await _service.CreateAsync(dto);
+                return CreatedAtAction(nameof(GetById), new { id }, id);
+            }
+            catch (KeyNotFoundException knf)
+            {
+                return NotFound(knf.Message);
+            }
+            catch (ArgumentException arg)
+            {
+                return BadRequest(arg.Message);
+            }
+        }
+
+        /// <summary>
+        /// Обновить товар
+        /// </summary>
+        [HttpPut("{id}")]
+        public async Task<IActionResult> Update(Guid id, [FromBody] CreateProductDto dto)
+        {
+            try
+            {
+                await _service.UpdateAsync(id, dto);
+                return NoContent();
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
+        /// <summary>
+        /// Удалить
+        /// </summary>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var deleted = await _service.DeleteAsync(id);
+            return deleted ? NoContent() : NotFound();
+        }
+
+        [HttpGet("filter")]
+        public async Task<ActionResult<IEnumerable<ProductDto>>> Filter(
+        [FromQuery] string? name,
+        [FromQuery] Guid? categoryId,
+        [FromQuery] Guid? sectionId)
+        {
+            return Ok(await _service.FilterAsync(name, categoryId, sectionId));
+        }
+
+
+        private ProductDto Map(Product p) => new()
+        {
+            Id = p.Id,
+            Name = p.Name,
+            Code = p.Code,
+            Barcode = p.Barcode,
+            Description = p.Description,
+            Quantity = p.Quantity,
+            Price = p.Price,
+            Unit = p.Unit.ToCodeDisplay(),
+            Category = p.Category?.ToRef(),
+            Section = p.Section?.ToRef(),
+            Supplier = p.Supplier?.ToRef()
         };
-
-        var updated = await _service.UpdateAsync(id, product);
-        return updated == null ? NotFound() : NoContent();
     }
-
-    [HttpDelete("{id}")]
-    public async Task<IActionResult> Delete(Guid id)
-    {
-        var deleted = await _service.DeleteAsync(id);
-        return deleted ? NoContent() : NotFound();
-    }
-
-    [HttpGet("filter")]
-    public async Task<ActionResult<IEnumerable<ProductDto>>> Filter([FromQuery] string? name, [FromQuery] Guid? categoryId, [FromQuery] Guid? sectionId)
-    {
-        var result = await _service.FilterAsync(name, categoryId, sectionId);
-        return Ok(result.Select(p => Map(p)));
-    }
-
-    private ProductDto Map(Product p) => new()
-    {
-        Id = p.Id,
-        Name = p.Name,
-        Code = p.Code,
-        Barcode = p.Barcode,
-        Description = p.Description,
-        Quantity = p.Quantity,
-        Price = p.Price,
-        Unit = p.Unit,
-        CategoryId = p.CategoryId,
-        SectionId = p.SectionId,
-        SupplierId = p.SupplierId
-    };
 }

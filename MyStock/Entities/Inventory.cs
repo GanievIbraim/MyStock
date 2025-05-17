@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using MyStock.Json;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MyStock.Entities
 {
@@ -18,19 +20,21 @@ namespace MyStock.Entities
         public string? Comment { get; set; }
         public ICollection<InventoryItem> Items { get; set; } = new List<InventoryItem>();
     }
-
+    
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum InventoryStatus
     {
         [Display(Name = "Открыта")]
-        Open,
+        Open = 0,
 
         [Display(Name = "Завершена")]
-        Completed,
+        Completed = 1,
 
         [Display(Name = "Подтверждена")]
-        Approved
+        Approved = 2
     }
 
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum InventoryType
     {
         [Display(Name = "Полная")]
@@ -43,6 +47,6 @@ namespace MyStock.Entities
         Scheduled = 2,
 
         [Display(Name = "Передача смены")]
-        ShiftTransfer = 3,
+        ShiftTransfer = 3
     }
 }

@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using MyStock.Json;
+using System.ComponentModel.DataAnnotations;
+using System.Text.Json.Serialization;
 
 namespace MyStock.Entities
 {
@@ -12,6 +14,8 @@ namespace MyStock.Entities
         public Guid? ContactId { get; set; }
         public Contact? Contact { get; set; }
     }
+
+    [JsonConverter(typeof(JsonCamelCaseEnumConverter))]
     public enum UserRole
     {
         [Display(Name = "Администратор")]
