@@ -53,6 +53,14 @@ namespace MyStock.Middleware
                         Type = "https://httpstatuses.com/400"
                     },
 
+                    UnauthorizedAccessException => new ProblemDetails
+                    {
+                        Status = 401,
+                        Title = "Unauthorized",
+                        Detail = ex.Message,
+                        Type = "https://httpstatuses.com/401"
+                    },
+
                     _ => new ProblemDetails
                     {
                         Status = (int)HttpStatusCode.InternalServerError,

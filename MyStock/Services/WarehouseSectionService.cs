@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MyStock.Services
 {
-    public class WarehouseSectionService : IService
+    public class WarehouseSectionService
     {
         private readonly AppDbContext _context;
 

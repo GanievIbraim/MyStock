@@ -4,7 +4,7 @@ using MyStock.DTO;
 
 namespace MyStock.Services
 {
-    public class OrderItemService : IService
+    public class OrderItemService
     {
         private readonly AppDbContext _context;
 

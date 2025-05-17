@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using MyStock.Services;
 
-public class ProductService : IService
+public class ProductService
 {
     private readonly AppDbContext _context;
 
