@@ -24,16 +24,25 @@ builder.Configuration
     .AddJsonFile($"appsettings.{rawEnv}.json", optional: true)
     .AddEnvironmentVariables();
 
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.ListenAnyIP(8080); // HTTP
+    serverOptions.ListenAnyIP(8443, listenOptions =>
+    {
+        listenOptions.UseHttps("/etc/ssl/myapp/certificate.pfx", "");
+    });
+});
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy(name: "AllowLocalhost",
-        policy =>
-        {
-            policy
-                .WithOrigins("http://localhost:5173", "https://inventorybro.netlify.app")   // адрес вашего фронтенда
-                .AllowAnyHeader()                       // разрешить любые заголовки
-                .AllowAnyMethod();                      // разрешить любые HTTP-методы
-        });
+    options.AddPolicy(name: "AllowLocalhost", policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin => true)
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
 });
 
 builder.Services.AddControllers();
@@ -66,6 +75,7 @@ if (app.Environment.IsDevelopment() || true)
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+app.UseRouting();
 app.UseCors("AllowLocalhost"); // CORS
 app.UseGlobalExceptionHandler(); // глобальный обработчик ошибок
 app.UseAuthorization();
