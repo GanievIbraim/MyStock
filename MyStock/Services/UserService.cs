@@ -110,6 +110,19 @@ namespace MyStock.Services
         }
 
         /// <summary>
+        /// Удалить пользователя по Id
+        /// </summary>
+        public async Task<bool> DeleteAsync(Guid id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null) return false;
+
+            _context.Users.Remove(user);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        /// <summary>
         /// Хэшируем пароль через SHA256 → Base64
         /// <summary>
         private static string HashPassword(string password)

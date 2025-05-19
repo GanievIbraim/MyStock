@@ -66,5 +66,14 @@ namespace MyStock.Controllers
             return NoContent();
         }
 
+        /// <summary>
+        /// Удалить пользователя
+        /// </summary>
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(Guid id)
+        {
+            var deleted = await _service.DeleteAsync(id);
+            return deleted ? NoContent() : NotFound();
+        }
     }
 }

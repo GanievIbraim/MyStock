@@ -15,7 +15,8 @@ namespace MyStock.DTO
         public OrderStatus Status { get; set; } = default!;
         public string? Comment { get; set; }
 
-        public Guid? WarehouseId { get; set; }
+        public Guid CreatedById { get; set; } = default!;
+        public Guid WarehouseId { get; set; }
         public Guid? OrganizationId { get; set; }
         public Guid? ContactId { get; set; }
     }
@@ -29,8 +30,9 @@ namespace MyStock.DTO
         public CodeDisplayDto Status { get; set; } = default!;
 
         public ReferenceDto? Organization { get; set; }
+        public ReferenceDto CreatedBy { get; set; } = default!;
         public ReferenceDto? Contact { get; set; }
-        public ReferenceDto? Warehouse { get; set; }
+        public ReferenceDto Warehouse { get; set; } = default!;
 
         public string? Comment { get; set; }
     }

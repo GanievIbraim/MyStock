@@ -13,8 +13,7 @@ namespace MyStock.Entities
         public OrderStatus Status { get; set; }
 
         public Guid CreatedById { get; set; }
-        public User CreatedBy { get; set; } = default!;
-
+        public Contact CreatedBy { get; set; } = default!;
         public Guid? OrganizationId { get; set; }
         public Organization? Organization { get; set; }
         public Guid? ContactId { get; set; }

@@ -105,6 +105,21 @@ namespace MyStock.Entities
                 .HasForeignKey(e => e.ContactId)
                 .OnDelete(DeleteBehavior.SetNull);
 
+            // 1) Кто создал заказ — это Contact
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.CreatedBy)
+                .WithMany()                          // или .WithMany(c => c.CreatedOrders) если хотите собрать коллекцию
+                .HasForeignKey(o => o.CreatedById)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // 2) Бизнес-контакт по заказу
+            modelBuilder.Entity<Order>()
+                .HasOne(o => o.Contact)
+                .WithMany()                          // или .WithMany(c => c.OrdersAsContact)
+                .HasForeignKey(o => o.ContactId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+
             // Precision for price fields
             modelBuilder.Entity<Product>()
                 .Property(p => p.Price)
@@ -143,8 +158,6 @@ namespace MyStock.Entities
                 .Property(o => o.Name)
                 .HasMaxLength(200)
                 .IsRequired();
-
-
         }
 
         public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)

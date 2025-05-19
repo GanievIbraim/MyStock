@@ -7,6 +7,7 @@ using MyStock.Services;
 
 using DotNetEnv;
 using Microsoft.EntityFrameworkCore;
+using MyStock.Services.Export;
 
 var rawEnv = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production";
 var envFile = $".env.{rawEnv.ToLower()}";
@@ -23,13 +24,25 @@ builder.Configuration
     .AddJsonFile($"appsettings.{rawEnv}.json", optional: true)
     .AddEnvironmentVariables();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(name: "AllowLocalhost",
+        policy =>
+        {
+            policy
+                .WithOrigins("http://localhost:5173", "https://inventorybro.netlify.app")   // адрес вашего фронтенда
+                .AllowAnyHeader()                       // разрешить любые заголовки
+                .AllowAnyMethod();                      // разрешить любые HTTP-методы
+        });
+});
+
 builder.Services.AddControllers();
+
 
 // Настроим подключение к PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -42,6 +55,9 @@ builder.Services.AddScoped<WarehouseService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<ContactService>();
 builder.Services.AddScoped<EmployeeService>();
+builder.Services.AddScoped<JsonExportService>();
+builder.Services.AddScoped<ExcelExportService>();
+builder.Services.AddScoped<PdfExportService>();
 
 var app = builder.Build();
 
@@ -50,8 +66,8 @@ if (app.Environment.IsDevelopment() || true)
     app.UseSwagger();
     app.UseSwaggerUI();
 }
-
-app.UseGlobalExceptionHandler(); // добавляем глобальный обработчик ошибок
+app.UseCors("AllowLocalhost"); // CORS
+app.UseGlobalExceptionHandler(); // глобальный обработчик ошибок
 app.UseAuthorization();
 app.MapControllers();
 

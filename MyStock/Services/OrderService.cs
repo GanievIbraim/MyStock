@@ -21,6 +21,7 @@ namespace MyStock.Services
             _context.Orders
                 .AsNoTracking()
                 .Include(o => o.Organization)
+                .Include(o => o.CreatedBy)
                 .Include(o => o.Contact)
                 .Include(o => o.Warehouse)
                 .Select(o => new OrderDto
@@ -30,9 +31,10 @@ namespace MyStock.Services
                     ApprovedAt = o.ApprovedAt,
                     Type = o.Type.ToCodeDisplay(),
                     Status = o.Status.ToCodeDisplay(),
+                    Warehouse = o.Warehouse.ToRef(),
+                    CreatedBy = o.CreatedBy.ToRef(),
                     Organization = o.Organization != null ? o.Organization.ToRef() : null,
                     Contact = o.Contact != null ? o.Contact.ToRef() : null,
-                    Warehouse = o.Warehouse != null ? o.Warehouse.ToRef() : null,
                     Comment = o.Comment
                 });
 
@@ -57,6 +59,7 @@ namespace MyStock.Services
             EnumUtils.EnsureEnumDefined(dto.Type, nameof(dto.Type));
             EnumUtils.EnsureEnumDefined(dto.Status, nameof(dto.Status));
 
+            await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.CreatedById, "Создал");
             await ServiceUtils.EnsureExistsAsync(_context.Warehouses, dto.WarehouseId, "Склад");
             await ServiceUtils.EnsureExistsAsync(_context.Organizations, dto.OrganizationId, "Организация");
             await ServiceUtils.EnsureExistsAsync(_context.Contacts, dto.ContactId, "Контакт");
@@ -69,7 +72,8 @@ namespace MyStock.Services
                 Status = dto.Status,
                 Comment = dto.Comment,
                 ApprovedAt = null,
-                WarehouseId = dto.WarehouseId!.Value,
+                CreatedById = dto.CreatedById,
+                WarehouseId = dto.WarehouseId,
                 OrganizationId = dto.OrganizationId,
                 ContactId = dto.ContactId
             };
@@ -96,7 +100,7 @@ namespace MyStock.Services
             o.Type = dto.Type;
             o.Status = dto.Status;
             o.Comment = dto.Comment;
-            o.WarehouseId = dto.WarehouseId!.Value;
+            o.WarehouseId = dto.WarehouseId;
             o.OrganizationId = dto.OrganizationId;
             o.ContactId = dto.ContactId;
 
